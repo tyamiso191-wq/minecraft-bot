@@ -155,12 +155,10 @@ let dupeCalisiyor = false
 async function cerceveDupe() {
   if (dupeCalisiyor) { bot.chat('Dupe zaten calisiyor!'); return }
 
-  // Item frame bir entity, findBlock degil findEntity kullan
   const cerceve = Object.values(bot.entities).find(e =>
     (e.name === 'item_frame' || e.name === 'glow_item_frame') &&
     e.position.distanceTo(bot.entity.position) < 6
   )
-
   if (!cerceve) { bot.chat('Yakinda item frame bulamadim!'); return }
 
   dupeCalisiyor = true
@@ -168,14 +166,26 @@ async function cerceveDupe() {
     await bot.lookAt(cerceve.position)
     await new Promise(r => setTimeout(r, 200))
 
-    // Cerceveye esyayi koy
+    // Cerceveye koy
     await bot.activateEntity(cerceve)
-    await new Promise(r => setTimeout(r, 350))
+    await new Promise(r => setTimeout(r, 500))
 
-    // Cerçeveden esyayi al
-    await bot.activateEntity(cerceve)
+    // Cerçeve entity'sini tekrar bul (id degismis olabilir)
+    const cerceve2 = Object.values(bot.entities).find(e =>
+      (e.name === 'item_frame' || e.name === 'glow_item_frame') &&
+      e.position.distanceTo(bot.entity.position) < 6
+    )
+    if (!cerceve2) { bot.chat('Cerceve kayboldu!'); return }
+
+    await bot.lookAt(cerceve2.position)
+    await new Promise(r => setTimeout(r, 200))
+
+    // Geri al
+    await bot.activateEntity(cerceve2)
+    bot.chat('Dupe tamam!')
   } catch (e) {
     console.log('Dupe hatasi:', e.message)
+    bot.chat('Dupe hatasi: ' + e.message)
   } finally {
     dupeCalisiyor = false
   }
@@ -441,4 +451,4 @@ bot.on('end', () => {
   registered = false
   setTimeout(() => process.exit(1), 5000)
 })
-                     
+          
