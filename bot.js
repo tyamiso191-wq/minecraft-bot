@@ -7,7 +7,7 @@ const config = {
   host: 'mc.quiltanarchy.xyz',
   port: 25565,
   username: 'MisotyBot',
-  version: '1.21.1',
+  version: '1.20.1',
   owner: 'Misoty',
   anthropicApiKey: 'ANTHROPIC_API_KEY_BURAYA',
   password: 'Egecan11'
