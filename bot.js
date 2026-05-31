@@ -1,7 +1,7 @@
 const mineflayer = require('mineflayer')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
 const { GoalNear, GoalFollow } = goals
-const Anthropic = require('@anthropic-ai/sdk')
+const Groq = require('groq-sdk')
 
 const config = {
   host: 'mc.quiltanarchy.xyz',
@@ -9,27 +9,25 @@ const config = {
   username: 'MisotyBot',
   version: '1.20.1',
   owner: 'Misoty',
-  anthropicApiKey: 'ANTHROPIC_API_KEY_BURAYA',
+  groqApiKey: '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',
   password: 'Egecan11'
 }
 
-const anthropic = new Anthropic({ apiKey: config.anthropicApiKey })
+const groq = new Groq({ apiKey: config.groqApiKey })
 const sohbetGecmisi = []
 
-async function claudeYanit(mesaj) {
-  // API key kontrolü
-  if (!config.anthropicApiKey || config.anthropicApiKey === 'ANTHROPIC_API_KEY_BURAYA') {
-    return 'Konuşmak isterdim ama API key ayarlı değil!'
-  }
+async function botYanit(mesaj) {
   sohbetGecmisi.push({ role: 'user', content: mesaj })
   if (sohbetGecmisi.length > 20) sohbetGecmisi.splice(0, 2)
-  const yanit = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+  const yanit = await groq.chat.completions.create({
+    model: 'llama-3.1-8b-instant',
     max_tokens: 150,
-    system: `Sen "MisotyBot" adında eğlenceli bir Minecraft botusun. Sahibin Misoty. Kısa ve samimi Türkçe cevaplar ver. Cevapların 200 karakteri geçmesin.`,
-    messages: sohbetGecmisi
+    messages: [
+      { role: 'system', content: 'Sen "MisotyBot" adinda eglenceli bir Minecraft botusun. Sahibin Misoty. Kisa ve samimi Turkce cevaplar ver. Cevaplarin 200 karakteri gecmesin.' },
+      ...sohbetGecmisi
+    ]
   })
-  const metin = yanit.content[0].text
+  const metin = yanit.choices[0].message.content
   sohbetGecmisi.push({ role: 'assistant', content: metin })
   return metin
 }
@@ -43,7 +41,7 @@ let attackInterval = null
 let registered = false
 
 // =============================
-//   TAKILMA ÖNLEME — OTOMATİK ZIPLA
+//   TAKILMA ÖNLEME
 // =============================
 let lastPos = null
 let stuckTicks = 0
@@ -57,16 +55,14 @@ setInterval(() => {
     if (isMoving && dist < 0.05) {
       stuckTicks++
       if (stuckTicks >= 3) {
-        // Takıldı — zıpla ve küçük random hareket
         bot.setControlState('jump', true)
         setTimeout(() => bot.setControlState('jump', false), 400)
-        // Rastgele yön
         const yaw = Math.random() * Math.PI * 2
         bot.entity.yaw = yaw
         bot.setControlState('forward', true)
         setTimeout(() => bot.setControlState('forward', false), 600)
         stuckTicks = 0
-        console.log('⚠️ Takıldı, zıplandı')
+        console.log('Takildi, ziplandı')
       }
     } else {
       stuckTicks = 0
@@ -80,34 +76,32 @@ setInterval(() => {
 // =============================
 bot.on('message', (jsonMsg) => {
   const msg = jsonMsg.toString().toLowerCase()
-  if (msg.includes('register') || msg.includes('kayıt') || msg.includes('/register')) {
+  if (msg.includes('register') || msg.includes('kayit') || msg.includes('/register')) {
     if (!registered) {
       setTimeout(() => {
         bot.chat(`/register ${config.password} ${config.password}`)
         registered = true
-        console.log('📝 /register gönderildi')
+        console.log('/register gonderildi')
       }, 1000)
     }
   }
-  if (msg.includes('login') || msg.includes('giriş') || msg.includes('/login') || msg.includes('please login')) {
+  if (msg.includes('login') || msg.includes('giris') || msg.includes('/login') || msg.includes('please login')) {
     setTimeout(() => {
       bot.chat(`/login ${config.password}`)
-      console.log('🔑 /login gönderildi')
+      console.log('/login gonderildi')
     }, 1000)
   }
 })
 
 bot.on('spawn', () => {
-  console.log('✅ Bot bağlandı!')
+  console.log('Bot baglandi!')
   setTimeout(() => { bot.chat(`/login ${config.password}`) }, 2000)
   setTimeout(() => autoArmor(), 3000)
-
-  // Pathfinder hareketlerini optimize et
   const defaultMov = new Movements(bot)
-  defaultMov.canDig = false         // Kazma kapatıldı (takılmayı azaltır)
-  defaultMov.allowParkour = true    // Parkur açık
-  defaultMov.allowSprinting = true  // Koşma açık
-  defaultMov.maxDropDown = 4        // 4 blok aşağı inebilir
+  defaultMov.canDig = false
+  defaultMov.allowParkour = true
+  defaultMov.allowSprinting = true
+  defaultMov.maxDropDown = 4
   bot.pathfinder.setMovements(defaultMov)
 })
 
@@ -129,16 +123,16 @@ function autoTotem() {
 // =============================
 async function autoArmor() {
   const armorSlots = {
-    'head': ['netherite_helmet', 'diamond_helmet', 'iron_helmet', 'golden_helmet', 'chainmail_helmet', 'leather_helmet'],
-    'torso': ['netherite_chestplate', 'diamond_chestplate', 'iron_chestplate', 'golden_chestplate', 'chainmail_chestplate', 'leather_chestplate'],
-    'legs': ['netherite_leggings', 'diamond_leggings', 'iron_leggings', 'golden_leggings', 'chainmail_leggings', 'leather_leggings'],
-    'feet': ['netherite_boots', 'diamond_boots', 'iron_boots', 'golden_boots', 'chainmail_boots', 'leather_boots'],
+    'head':  ['netherite_helmet','diamond_helmet','iron_helmet','golden_helmet','chainmail_helmet','leather_helmet'],
+    'torso': ['netherite_chestplate','diamond_chestplate','iron_chestplate','golden_chestplate','chainmail_chestplate','leather_chestplate'],
+    'legs':  ['netherite_leggings','diamond_leggings','iron_leggings','golden_leggings','chainmail_leggings','leather_leggings'],
+    'feet':  ['netherite_boots','diamond_boots','iron_boots','golden_boots','chainmail_boots','leather_boots'],
   }
   for (const [slot, items] of Object.entries(armorSlots)) {
     for (const itemName of items) {
       const item = bot.inventory.items().find(i => i.name === itemName)
       if (item) {
-        try { await bot.equip(item, slot); console.log(`🛡️ ${itemName} giyildi (${slot})`); break } catch (e) {}
+        try { await bot.equip(item, slot); console.log(`${itemName} giyildi (${slot})`); break } catch (e) {}
       }
     }
   }
@@ -150,27 +144,21 @@ async function autoArmor() {
 let dupeCalisiyor = false
 
 async function cerceveDupe() {
-  if (dupeCalisiyor) { bot.chat('Dupe zaten çalışıyor!'); return }
-
+  if (dupeCalisiyor) { bot.chat('Dupe zaten calisiyor!'); return }
   const cerceve = bot.findBlock({
     matching: (b) => b.name === 'item_frame' || b.name === 'glow_item_frame',
     maxDistance: 6
   })
-  if (!cerceve) { bot.chat('Yakında item frame bulamadım!'); return }
-
+  if (!cerceve) { bot.chat('Yakinda item frame bulamadim!'); return }
   dupeCalisiyor = true
   try {
     await bot.lookAt(cerceve.position.offset(0.5, 0.5, 0.5))
     await new Promise(r => setTimeout(r, 150))
-
-    // Çerçeveye koy
     await bot.activateBlock(cerceve)
     await new Promise(r => setTimeout(r, 300))
-
-    // Çerçeveden çıkar
     await bot.activateBlock(cerceve)
   } catch (e) {
-    console.log('Dupe hatası:', e.message)
+    console.log('Dupe hatasi:', e.message)
   } finally {
     dupeCalisiyor = false
   }
@@ -191,7 +179,7 @@ bot.on('chat', async (username, message) => {
     switch (komut) {
 
       case 'topla':
-        if (!args[1]) { bot.chat('Kullanım: !topla <kaynak>'); break }
+        if (!args[1]) { bot.chat('Kullanim: !topla <kaynak>'); break }
         topla(args[1]); break
 
       case 'dur':
@@ -200,13 +188,13 @@ bot.on('chat', async (username, message) => {
         bot.pathfinder.stop()
         bot.chat('Durdum.'); break
 
-      case 'saldır': case 'saldir':
-        if (!args[1]) { bot.chat('Kullanım: !saldır <oyuncu>'); break }
-        saldır(args[1]); break
+      case 'saldir':
+        if (!args[1]) { bot.chat('Kullanim: !saldir <oyuncu>'); break }
+        saldir(args[1]); break
 
       case 'gel': {
         const p = bot.players[username]
-        if (!p?.entity) { bot.chat('Seni göremiyorum!'); break }
+        if (!p?.entity) { bot.chat('Seni goremiyorum!'); break }
         bot.chat('Geliyorum!')
         const mov = new Movements(bot)
         mov.allowParkour = true; mov.allowSprinting = true
@@ -218,7 +206,7 @@ bot.on('chat', async (username, message) => {
       case 'takip': {
         const hedefAdi = args[1] || username
         const hp = bot.players[hedefAdi]
-        if (!hp?.entity) { bot.chat(`${hedefAdi} bulunamadı!`); break }
+        if (!hp?.entity) { bot.chat(`${hedefAdi} bulunamadi!`); break }
         bot.chat(`${hedefAdi} takip ediyorum!`)
         const mov = new Movements(bot)
         mov.allowParkour = true; mov.allowSprinting = true
@@ -228,98 +216,173 @@ bot.on('chat', async (username, message) => {
 
       case 'envanter': {
         const items = bot.inventory.items()
-        bot.chat(items.length === 0 ? 'Envanterim boş.' : 'Envanter: ' + items.map(i => `${i.name} x${i.count}`).join(', '))
+        bot.chat(items.length === 0 ? 'Envanterim bos.' : 'Envanter: ' + items.map(i => `${i.name} x${i.count}`).join(', '))
         break
       }
 
       case 'tpa':
         bot.chat(`/tpa ${config.owner}`)
-        bot.chat(`${config.owner} adlı oyuncuya TPA isteği attım!`)
+        bot.chat(`${config.owner} oyuncusuna TPA attim!`)
         break
 
-      case 'zırh': case 'zirh':
+      case 'zirh':
         await autoArmor()
-        bot.chat('Zırhları giydim!')
+        bot.chat('Zirhlari giydim!')
         break
 
       case 'totem':
         autoTotem()
-        bot.chat('Totemi offhand\'a aldım!')
+        bot.chat('Totemi offhanda aldim!')
         break
 
-      // ÇERÇEVE DUPE
-      case 'dupe': case 'cerceve': case 'çerçeve':
+      case 'dupe':
         await cerceveDupe()
         break
 
-      case 'sıfırla': case 'sifirla':
+      case 'sifirla':
         sohbetGecmisi.length = 0
-        bot.chat('Sohbet hafızamı temizledim!'); break
+        bot.chat('Sohbet hafizami temizledim!'); break
 
-      case 'yardım': case 'yardim':
-        bot.chat('Komutlar: !topla | !saldır | !takip | !gel | !tpa | !zırh | !totem | !dupe | !envanter | !dur | !sıfırla')
+      case 'yardim':
+        bot.chat('Komutlar: !topla | !saldir | !takip | !gel | !tpa | !zirh | !totem | !dupe | !envanter | !dur | !sifirla')
         break
 
       default:
         try {
-          const yanit = await claudeYanit(msg.slice(1).trim())
+          const yanit = await botYanit(msg.slice(1).trim())
           bot.chat(yanit.length <= 256 ? yanit : yanit.substring(0, 253) + '...')
         } catch (e) {
-          console.error('Claude hatası:', e.message)
-          bot.chat('Hmm, şu an konuşamıyorum.')
+          console.error('Groq hatasi:', e.message)
+          bot.chat('Su an konusamiyorum.')
         }
     }
     return
   }
 
-  // ! yoksa → sohbet
+  // ! yoksa sohbet
   try {
-    const yanit = await claudeYanit(msg)
+    const yanit = await botYanit(msg)
     bot.chat(yanit.length <= 256 ? yanit : yanit.substring(0, 253) + '...')
   } catch (e) {
-    console.error('Claude hatası:', e.message)
-    bot.chat('Hmm, şu an konuşamıyorum.')
+    console.error('Groq hatasi:', e.message)
+    bot.chat('Su an konusamiyorum.')
   }
 })
 
 // =============================
 //   KAYNAK TOPLAMA
 // =============================
+async function aletEkip(blokAdi) {
+  const kazmaBloklari = ['stone','cobblestone','coal_ore','deepslate_coal_ore','iron_ore','deepslate_iron_ore',
+    'gold_ore','deepslate_gold_ore','diamond_ore','deepslate_diamond_ore','redstone_ore','deepslate_redstone_ore',
+    'lapis_ore','deepslate_lapis_ore','gravel','sand']
+  const baltaBloklari = ['oak_log','birch_log','spruce_log','jungle_log','acacia_log','dark_oak_log','mangrove_log']
+  const kurekBloklari = ['dirt','grass_block']
+
+  let aletSiralama = []
+  if (kazmaBloklari.includes(blokAdi))
+    aletSiralama = ['netherite_pickaxe','diamond_pickaxe','iron_pickaxe','stone_pickaxe','wooden_pickaxe','golden_pickaxe']
+  else if (baltaBloklari.includes(blokAdi))
+    aletSiralama = ['netherite_axe','diamond_axe','iron_axe','stone_axe','wooden_axe','golden_axe']
+  else if (kurekBloklari.includes(blokAdi))
+    aletSiralama = ['netherite_shovel','diamond_shovel','iron_shovel','stone_shovel','wooden_shovel','golden_shovel']
+
+  for (const aletAdi of aletSiralama) {
+    const alet = bot.inventory.items().find(i => i.name === aletAdi)
+    if (alet) {
+      try { await bot.equip(alet, 'hand') } catch(e) {}
+      return
+    }
+  }
+}
+
+async function yerdekiEsyalariTopla() {
+  const itemlar = Object.values(bot.entities).filter(e =>
+    e.name === 'item' && e.position.distanceTo(bot.entity.position) < 8
+  )
+  for (const item of itemlar) {
+    if (!collecting) break
+    try {
+      await bot.pathfinder.goto(new GoalNear(item.position.x, item.position.y, item.position.z, 1))
+      await new Promise(r => setTimeout(r, 200))
+    } catch(e) {}
+  }
+}
+
 async function topla(kaynak) {
   const kaynakMap = {
-    'odun': ['oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log'],
-    'taş': ['stone', 'cobblestone'], 'kömür': ['coal_ore', 'deepslate_coal_ore'],
-    'demir': ['iron_ore', 'deepslate_iron_ore'], 'altın': ['gold_ore', 'deepslate_gold_ore'],
-    'elmas': ['diamond_ore', 'deepslate_diamond_ore'], 'redstone': ['redstone_ore', 'deepslate_redstone_ore'],
-    'lapis': ['lapis_ore', 'deepslate_lapis_ore'], 'toprak': ['dirt', 'grass_block'],
-    'kum': ['sand'], 'çakıl': ['gravel'],
+    'odun':    ['oak_log','birch_log','spruce_log','jungle_log','acacia_log','dark_oak_log','mangrove_log'],
+    'tas':     ['stone','cobblestone'],
+    'komur':   ['coal_ore','deepslate_coal_ore'],
+    'demir':   ['iron_ore','deepslate_iron_ore'],
+    'altin':   ['gold_ore','deepslate_gold_ore'],
+    'elmas':   ['diamond_ore','deepslate_diamond_ore'],
+    'redstone':['redstone_ore','deepslate_redstone_ore'],
+    'lapis':   ['lapis_ore','deepslate_lapis_ore'],
+    'toprak':  ['dirt','grass_block'],
+    'kum':     ['sand'],
+    'cakil':   ['gravel'],
   }
+
   const bloklar = kaynakMap[kaynak.toLowerCase()]
-  if (!bloklar) { bot.chat(`"${kaynak}" tanımıyorum. Bilinen: ${Object.keys(kaynakMap).join(', ')}`); return }
+  if (!bloklar) {
+    bot.chat(`"${kaynak}" tanimiyor. Bilinen: ${Object.keys(kaynakMap).join(', ')}`)
+    return
+  }
+
   collecting = true
-  bot.chat(`${kaynak} toplamaya başlıyorum!`)
+  bot.chat(`${kaynak} toplamaya basliyorum!`)
+  let bulamadiSayac = 0
+
   while (collecting) {
     let hedefBlok = null
-    for (const blokAdi of bloklar) {
-      const b = bot.findBlock({ matching: bot.registry.blocksByName[blokAdi]?.id, maxDistance: 32 })
-      if (b) { hedefBlok = b; break }
+    for (const mesafe of [32, 64]) {
+      for (const blokAdi of bloklar) {
+        const id = bot.registry.blocksByName[blokAdi]?.id
+        if (!id) continue
+        const b = bot.findBlock({ matching: id, maxDistance: mesafe })
+        if (b) { hedefBlok = b; break }
+      }
+      if (hedefBlok) break
     }
-    if (!hedefBlok) { bot.chat(`Yakında ${kaynak} bulamadım.`); collecting = false; break }
+
+    if (!hedefBlok) {
+      bulamadiSayac++
+      if (bulamadiSayac >= 3) {
+        bot.chat(`Yakinda ${kaynak} bulamadim, duruyorum.`)
+        collecting = false
+        break
+      }
+      bot.setControlState('forward', true)
+      await new Promise(r => setTimeout(r, 1500))
+      bot.setControlState('forward', false)
+      await new Promise(r => setTimeout(r, 300))
+      continue
+    }
+
+    bulamadiSayac = 0
+
     try {
+      await aletEkip(hedefBlok.name)
       await bot.pathfinder.goto(new GoalNear(hedefBlok.position.x, hedefBlok.position.y, hedefBlok.position.z, 1))
-      await bot.dig(hedefBlok)
-    } catch (e) {}
-    await new Promise(r => setTimeout(r, 200))
+      if (bot.canDigBlock(hedefBlok)) await bot.dig(hedefBlok)
+      await new Promise(r => setTimeout(r, 300))
+      await yerdekiEsyalariTopla()
+    } catch (e) {
+      console.log('Toplama hatasi:', e.message)
+    }
+
+    await new Promise(r => setTimeout(r, 150))
   }
 }
 
 // =============================
 //   SALDIRI
 // =============================
-function saldır(hedefAdi) {
+function saldir(hedefAdi) {
   attacking = false; clearInterval(attackInterval)
-  if (!bot.players[hedefAdi]?.entity) { bot.chat(`${hedefAdi} bulunamadı!`); return }
-  bot.chat(`${hedefAdi} saldırıyorum!`)
+  if (!bot.players[hedefAdi]?.entity) { bot.chat(`${hedefAdi} bulunamadi!`); return }
+  bot.chat(`${hedefAdi} saldiriyorum!`)
   attacking = true
   const mov = new Movements(bot)
   mov.allowParkour = true; mov.allowSprinting = true
@@ -336,9 +399,9 @@ function saldır(hedefAdi) {
 // =============================
 //   HATALAR
 // =============================
-bot.on('error', err => console.log('❌ Hata:', err))
+bot.on('error', err => console.log('Hata:', err))
 bot.on('end', () => {
-  console.log('🔌 Bağlantı kesildi, yeniden bağlanılıyor...')
+  console.log('Baglanti kesildi, yeniden baglaniliyor...')
   registered = false
   setTimeout(() => process.exit(1), 5000)
 })
