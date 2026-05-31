@@ -9,7 +9,7 @@ const config = {
   username: 'MisotyBot',
   version: '1.20.1',
   owner: 'Misoty',
-  groqApiKey: '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',
+  groqApiKey: 'GROQ_API_KEY_BURAYA',
   password: 'Egecan11'
 }
 
