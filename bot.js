@@ -17,6 +17,10 @@ const anthropic = new Anthropic({ apiKey: config.anthropicApiKey })
 const sohbetGecmisi = []
 
 async function claudeYanit(mesaj) {
+  // API key kontrolü
+  if (!config.anthropicApiKey || config.anthropicApiKey === 'ANTHROPIC_API_KEY_BURAYA') {
+    return 'Konuşmak isterdim ama API key ayarlı değil!'
+  }
   sohbetGecmisi.push({ role: 'user', content: mesaj })
   if (sohbetGecmisi.length > 20) sohbetGecmisi.splice(0, 2)
   const yanit = await anthropic.messages.create({
@@ -37,6 +41,39 @@ let collecting = false
 let attacking = false
 let attackInterval = null
 let registered = false
+
+// =============================
+//   TAKILMA ÖNLEME — OTOMATİK ZIPLA
+// =============================
+let lastPos = null
+let stuckTicks = 0
+
+setInterval(() => {
+  if (!bot.entity) return
+  const pos = bot.entity.position
+  if (lastPos) {
+    const dist = pos.distanceTo(lastPos)
+    const isMoving = bot.pathfinder.isMoving ? bot.pathfinder.isMoving() : true
+    if (isMoving && dist < 0.05) {
+      stuckTicks++
+      if (stuckTicks >= 3) {
+        // Takıldı — zıpla ve küçük random hareket
+        bot.setControlState('jump', true)
+        setTimeout(() => bot.setControlState('jump', false), 400)
+        // Rastgele yön
+        const yaw = Math.random() * Math.PI * 2
+        bot.entity.yaw = yaw
+        bot.setControlState('forward', true)
+        setTimeout(() => bot.setControlState('forward', false), 600)
+        stuckTicks = 0
+        console.log('⚠️ Takıldı, zıplandı')
+      }
+    } else {
+      stuckTicks = 0
+    }
+  }
+  lastPos = pos.clone()
+}, 1000)
 
 // =============================
 //   OTOMATİK KAYIT / GİRİŞ
@@ -63,26 +100,27 @@ bot.on('message', (jsonMsg) => {
 bot.on('spawn', () => {
   console.log('✅ Bot bağlandı!')
   setTimeout(() => { bot.chat(`/login ${config.password}`) }, 2000)
-  // Spawn olunca zırh giy
   setTimeout(() => autoArmor(), 3000)
+
+  // Pathfinder hareketlerini optimize et
+  const defaultMov = new Movements(bot)
+  defaultMov.canDig = false         // Kazma kapatıldı (takılmayı azaltır)
+  defaultMov.allowParkour = true    // Parkur açık
+  defaultMov.allowSprinting = true  // Koşma açık
+  defaultMov.maxDropDown = 4        // 4 blok aşağı inebilir
+  bot.pathfinder.setMovements(defaultMov)
 })
 
 // =============================
 //   AUTO TOTEM
 // =============================
-bot.on('health', () => {
-  autoTotem()
-})
+bot.on('health', () => { autoTotem() })
 
 function autoTotem() {
-  const offhand = bot.inventory.slots[45] // Offhand slotu
-  // Offhand'da totem yoksa yerleştir
+  const offhand = bot.inventory.slots[45]
   if (offhand && offhand.name === 'totem_of_undying') return
-
   const totem = bot.inventory.items().find(item => item.name === 'totem_of_undying')
   if (!totem) return
-
-  // Totemi offhand'a taşı
   bot.equip(totem, 'off-hand').catch(() => {})
 }
 
@@ -96,18 +134,45 @@ async function autoArmor() {
     'legs': ['netherite_leggings', 'diamond_leggings', 'iron_leggings', 'golden_leggings', 'chainmail_leggings', 'leather_leggings'],
     'feet': ['netherite_boots', 'diamond_boots', 'iron_boots', 'golden_boots', 'chainmail_boots', 'leather_boots'],
   }
-
   for (const [slot, items] of Object.entries(armorSlots)) {
     for (const itemName of items) {
       const item = bot.inventory.items().find(i => i.name === itemName)
       if (item) {
-        try {
-          await bot.equip(item, slot)
-          console.log(`🛡️ ${itemName} giyildi (${slot})`)
-          break
-        } catch (e) {}
+        try { await bot.equip(item, slot); console.log(`🛡️ ${itemName} giyildi (${slot})`); break } catch (e) {}
       }
     }
+  }
+}
+
+// =============================
+//   ÇERÇEVE DUPE
+// =============================
+let dupeCalisiyor = false
+
+async function cerceveDupe() {
+  if (dupeCalisiyor) { bot.chat('Dupe zaten çalışıyor!'); return }
+
+  const cerceve = bot.findBlock({
+    matching: (b) => b.name === 'item_frame' || b.name === 'glow_item_frame',
+    maxDistance: 6
+  })
+  if (!cerceve) { bot.chat('Yakında item frame bulamadım!'); return }
+
+  dupeCalisiyor = true
+  try {
+    await bot.lookAt(cerceve.position.offset(0.5, 0.5, 0.5))
+    await new Promise(r => setTimeout(r, 150))
+
+    // Çerçeveye koy
+    await bot.activateBlock(cerceve)
+    await new Promise(r => setTimeout(r, 300))
+
+    // Çerçeveden çıkar
+    await bot.activateBlock(cerceve)
+  } catch (e) {
+    console.log('Dupe hatası:', e.message)
+  } finally {
+    dupeCalisiyor = false
   }
 }
 
@@ -143,7 +208,9 @@ bot.on('chat', async (username, message) => {
         const p = bot.players[username]
         if (!p?.entity) { bot.chat('Seni göremiyorum!'); break }
         bot.chat('Geliyorum!')
-        bot.pathfinder.setMovements(new Movements(bot))
+        const mov = new Movements(bot)
+        mov.allowParkour = true; mov.allowSprinting = true
+        bot.pathfinder.setMovements(mov)
         bot.pathfinder.setGoal(new GoalNear(p.entity.position.x, p.entity.position.y, p.entity.position.z, 2))
         break
       }
@@ -153,7 +220,9 @@ bot.on('chat', async (username, message) => {
         const hp = bot.players[hedefAdi]
         if (!hp?.entity) { bot.chat(`${hedefAdi} bulunamadı!`); break }
         bot.chat(`${hedefAdi} takip ediyorum!`)
-        bot.pathfinder.setMovements(new Movements(bot))
+        const mov = new Movements(bot)
+        mov.allowParkour = true; mov.allowSprinting = true
+        bot.pathfinder.setMovements(mov)
         bot.pathfinder.setGoal(new GoalFollow(hp.entity, 3), true); break
       }
 
@@ -163,22 +232,24 @@ bot.on('chat', async (username, message) => {
         break
       }
 
-      // !tpa → Misoty'ye tpa isteği at
       case 'tpa':
         bot.chat(`/tpa ${config.owner}`)
         bot.chat(`${config.owner} adlı oyuncuya TPA isteği attım!`)
         break
 
-      // Manuel zırh giy
       case 'zırh': case 'zirh':
         await autoArmor()
         bot.chat('Zırhları giydim!')
         break
 
-      // Manuel totem yerleştir
       case 'totem':
         autoTotem()
         bot.chat('Totemi offhand\'a aldım!')
+        break
+
+      // ÇERÇEVE DUPE
+      case 'dupe': case 'cerceve': case 'çerçeve':
+        await cerceveDupe()
         break
 
       case 'sıfırla': case 'sifirla':
@@ -186,14 +257,17 @@ bot.on('chat', async (username, message) => {
         bot.chat('Sohbet hafızamı temizledim!'); break
 
       case 'yardım': case 'yardim':
-        bot.chat('Komutlar: !topla | !saldır | !takip | !gel | !tpa | !zırh | !totem | !envanter | !dur | !sıfırla')
+        bot.chat('Komutlar: !topla | !saldır | !takip | !gel | !tpa | !zırh | !totem | !dupe | !envanter | !dur | !sıfırla')
         break
 
       default:
         try {
           const yanit = await claudeYanit(msg.slice(1).trim())
           bot.chat(yanit.length <= 256 ? yanit : yanit.substring(0, 253) + '...')
-        } catch (e) { bot.chat('Bir şey söyleyecektim ama unuttum...') }
+        } catch (e) {
+          console.error('Claude hatası:', e.message)
+          bot.chat('Hmm, şu an konuşamıyorum.')
+        }
     }
     return
   }
@@ -202,7 +276,10 @@ bot.on('chat', async (username, message) => {
   try {
     const yanit = await claudeYanit(msg)
     bot.chat(yanit.length <= 256 ? yanit : yanit.substring(0, 253) + '...')
-  } catch (e) { bot.chat('Bir şey söyleyecektim ama unuttum...') }
+  } catch (e) {
+    console.error('Claude hatası:', e.message)
+    bot.chat('Hmm, şu an konuşamıyorum.')
+  }
 })
 
 // =============================
@@ -244,7 +321,9 @@ function saldır(hedefAdi) {
   if (!bot.players[hedefAdi]?.entity) { bot.chat(`${hedefAdi} bulunamadı!`); return }
   bot.chat(`${hedefAdi} saldırıyorum!`)
   attacking = true
-  bot.pathfinder.setMovements(new Movements(bot))
+  const mov = new Movements(bot)
+  mov.allowParkour = true; mov.allowSprinting = true
+  bot.pathfinder.setMovements(mov)
   attackInterval = setInterval(() => {
     if (!attacking) { clearInterval(attackInterval); return }
     const hedef = bot.players[hedefAdi]?.entity
