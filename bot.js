@@ -51,25 +51,33 @@ setInterval(() => {
   const pos = bot.entity.position
   if (lastPos) {
     const dist = pos.distanceTo(lastPos)
-    const isMoving = bot.pathfinder.isMoving ? bot.pathfinder.isMoving() : true
-    if (isMoving && dist < 0.05) {
+    const hedefVar = bot.pathfinder.goal != null
+    if (hedefVar && dist < 0.1) {
       stuckTicks++
-      if (stuckTicks >= 3) {
+      if (stuckTicks >= 2) {
+        // Zipla
         bot.setControlState('jump', true)
-        setTimeout(() => bot.setControlState('jump', false), 400)
-        const yaw = Math.random() * Math.PI * 2
-        bot.entity.yaw = yaw
+        setTimeout(() => bot.setControlState('jump', false), 500)
+        // Rastgele yon
+        bot.entity.yaw = Math.random() * Math.PI * 2
         bot.setControlState('forward', true)
-        setTimeout(() => bot.setControlState('forward', false), 600)
+        setTimeout(() => bot.setControlState('forward', false), 800)
+        // Pathfinder'i yeniden baslat
+        const goal = bot.pathfinder.goal
+        if (goal) {
+          setTimeout(() => {
+            try { bot.pathfinder.setGoal(goal, true) } catch(e) {}
+          }, 900)
+        }
         stuckTicks = 0
-        console.log('Takildi, ziplandı')
+        console.log('Takildi, kurtarildi')
       }
     } else {
       stuckTicks = 0
     }
   }
   lastPos = pos.clone()
-}, 1000)
+}, 200)
 
 // =============================
 //   OTOMATİK KAYIT / GİRİŞ
@@ -98,10 +106,11 @@ bot.on('spawn', () => {
   setTimeout(() => { bot.chat(`/login ${config.password}`) }, 2000)
   setTimeout(() => autoArmor(), 3000)
   const defaultMov = new Movements(bot)
-  defaultMov.canDig = false
+  defaultMov.canDig = true
   defaultMov.allowParkour = true
   defaultMov.allowSprinting = true
-  defaultMov.maxDropDown = 4
+  defaultMov.maxDropDown = 6
+  defaultMov.jumpCost = 0.5
   bot.pathfinder.setMovements(defaultMov)
 })
 
@@ -145,18 +154,26 @@ let dupeCalisiyor = false
 
 async function cerceveDupe() {
   if (dupeCalisiyor) { bot.chat('Dupe zaten calisiyor!'); return }
-  const cerceve = bot.findBlock({
-    matching: (b) => b.name === 'item_frame' || b.name === 'glow_item_frame',
-    maxDistance: 6
-  })
+
+  // Item frame bir entity, findBlock degil findEntity kullan
+  const cerceve = Object.values(bot.entities).find(e =>
+    (e.name === 'item_frame' || e.name === 'glow_item_frame') &&
+    e.position.distanceTo(bot.entity.position) < 6
+  )
+
   if (!cerceve) { bot.chat('Yakinda item frame bulamadim!'); return }
+
   dupeCalisiyor = true
   try {
-    await bot.lookAt(cerceve.position.offset(0.5, 0.5, 0.5))
-    await new Promise(r => setTimeout(r, 150))
-    await bot.activateBlock(cerceve)
-    await new Promise(r => setTimeout(r, 300))
-    await bot.activateBlock(cerceve)
+    await bot.lookAt(cerceve.position)
+    await new Promise(r => setTimeout(r, 200))
+
+    // Cerceveye esyayi koy
+    await bot.activateEntity(cerceve)
+    await new Promise(r => setTimeout(r, 350))
+
+    // Cerçeveden esyayi al
+    await bot.activateEntity(cerceve)
   } catch (e) {
     console.log('Dupe hatasi:', e.message)
   } finally {
@@ -262,10 +279,11 @@ bot.on('chat', async (username, message) => {
   // ! yoksa sohbet
   try {
     const yanit = await botYanit(msg)
-    bot.chat(yanit.length <= 256 ? yanit : yanit.substring(0, 253) + '...')
+    const temiz = yanit.replace(/[^\x00-\x7F\u00C0-\u024F\u0400-\u04FF]/g, '').trim()
+    bot.chat(temiz.length > 0 ? (temiz.length <= 256 ? temiz : temiz.substring(0, 253) + '...') : 'Hmm?')
   } catch (e) {
     console.error('Groq hatasi:', e.message)
-    bot.chat('Su an konusamiyorum.')
+    bot.chat('Simdi konusamiyorum, sonra sor!')
   }
 })
 
@@ -364,15 +382,33 @@ async function topla(kaynak) {
 
     try {
       await aletEkip(hedefBlok.name)
+
+      // Kazma hareketi icin canDig ac
+      const digMov = new Movements(bot)
+      digMov.canDig = true
+      digMov.allowParkour = true
+      digMov.allowSprinting = true
+      digMov.maxDropDown = 6
+      bot.pathfinder.setMovements(digMov)
+
       await bot.pathfinder.goto(new GoalNear(hedefBlok.position.x, hedefBlok.position.y, hedefBlok.position.z, 1))
-      if (bot.canDigBlock(hedefBlok)) await bot.dig(hedefBlok)
-      await new Promise(r => setTimeout(r, 300))
+
+      // Blok hala orada mi?
+      const guncelBlok = bot.blockAt(hedefBlok.position)
+      if (guncelBlok && guncelBlok.name === hedefBlok.name) {
+        if (bot.canDigBlock(guncelBlok)) {
+          await bot.dig(guncelBlok)
+        }
+      }
+
+      await new Promise(r => setTimeout(r, 400))
       await yerdekiEsyalariTopla()
     } catch (e) {
       console.log('Toplama hatasi:', e.message)
+      await new Promise(r => setTimeout(r, 500))
     }
 
-    await new Promise(r => setTimeout(r, 150))
+    await new Promise(r => setTimeout(r, 100))
   }
 }
 
@@ -393,7 +429,7 @@ function saldir(hedefAdi) {
     if (!hedef) { bot.chat(`${hedefAdi} kayboldu.`); attacking = false; clearInterval(attackInterval); return }
     bot.pathfinder.setGoal(new GoalNear(hedef.position.x, hedef.position.y, hedef.position.z, 2), true)
     if (bot.entity.position.distanceTo(hedef.position) <= 3.5) bot.attack(hedef)
-  }, 500)
+  }, 200)
 }
 
 // =============================
@@ -405,3 +441,4 @@ bot.on('end', () => {
   registered = false
   setTimeout(() => process.exit(1), 5000)
 })
+                     
