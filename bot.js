@@ -46,27 +46,40 @@ let registered = false
 let lastPos = null
 let stuckTicks = 0
 
+let botDurdu = false
+
+function botDurdur() {
+  botDurdu = true
+  collecting = false
+  attacking = false
+  clearInterval(attackInterval)
+  stuckTicks = 0
+  bot.pathfinder.stop()
+  // Tum kontrolleri sifirla
+  for (const ctrl of ['forward','back','left','right','jump','sprint']) {
+    bot.setControlState(ctrl, false)
+  }
+}
+
 setInterval(() => {
   if (!bot.entity) return
+  if (botDurdu) return  // durunduysa takilma kontrolu yapma
   const pos = bot.entity.position
   if (lastPos) {
     const dist = pos.distanceTo(lastPos)
     const hedefVar = bot.pathfinder.goal != null
     if (hedefVar && dist < 0.1) {
       stuckTicks++
-      if (stuckTicks >= 2) {
-        // Zipla
+      if (stuckTicks >= 3) {
         bot.setControlState('jump', true)
-        setTimeout(() => bot.setControlState('jump', false), 500)
-        // Rastgele yon
+        setTimeout(() => { if (!botDurdu) bot.setControlState('jump', false) }, 500)
         bot.entity.yaw = Math.random() * Math.PI * 2
         bot.setControlState('forward', true)
-        setTimeout(() => bot.setControlState('forward', false), 800)
-        // Pathfinder'i yeniden baslat
+        setTimeout(() => { if (!botDurdu) bot.setControlState('forward', false) }, 800)
         const goal = bot.pathfinder.goal
         if (goal) {
           setTimeout(() => {
-            try { bot.pathfinder.setGoal(goal, true) } catch(e) {}
+            try { if (!botDurdu) bot.pathfinder.setGoal(goal, true) } catch(e) {}
           }, 900)
         }
         stuckTicks = 0
@@ -77,7 +90,7 @@ setInterval(() => {
     }
   }
   lastPos = pos.clone()
-}, 200)
+}, 500)
 
 // =============================
 //   OTOMATİK KAYIT / GİRİŞ
@@ -210,9 +223,7 @@ bot.on('chat', async (username, message) => {
         topla(args[1]); break
 
       case 'dur':
-        collecting = false; attacking = false
-        clearInterval(attackInterval)
-        bot.pathfinder.stop()
+        botDurdur()
         bot.chat('Durdum.'); break
 
       case 'saldir':
@@ -222,9 +233,13 @@ bot.on('chat', async (username, message) => {
       case 'gel': {
         const p = bot.players[username]
         if (!p?.entity) { bot.chat('Seni goremiyorum!'); break }
+        botDurdu = false
         bot.chat('Geliyorum!')
         const mov = new Movements(bot)
-        mov.allowParkour = true; mov.allowSprinting = true
+        mov.canDig = true
+        mov.allowParkour = true
+        mov.allowSprinting = true
+        mov.maxDropDown = 6
         bot.pathfinder.setMovements(mov)
         bot.pathfinder.setGoal(new GoalNear(p.entity.position.x, p.entity.position.y, p.entity.position.z, 2))
         break
@@ -234,9 +249,13 @@ bot.on('chat', async (username, message) => {
         const hedefAdi = args[1] || username
         const hp = bot.players[hedefAdi]
         if (!hp?.entity) { bot.chat(`${hedefAdi} bulunamadi!`); break }
+        botDurdu = false
         bot.chat(`${hedefAdi} takip ediyorum!`)
         const mov = new Movements(bot)
-        mov.allowParkour = true; mov.allowSprinting = true
+        mov.canDig = true
+        mov.allowParkour = true
+        mov.allowSprinting = true
+        mov.maxDropDown = 6
         bot.pathfinder.setMovements(mov)
         bot.pathfinder.setGoal(new GoalFollow(hp.entity, 3), true); break
       }
