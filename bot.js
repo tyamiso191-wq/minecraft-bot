@@ -4,8 +4,8 @@ const { GoalNear, GoalFollow } = goals
 const Groq = require('groq-sdk')
 
 const config = {
-  host: 'LexesSmp56.aternos.me:28112',
-  port: 25565,
+  host: 'LexesSmp56.aternos.me',
+  port: 28112,
   username: 'MisotyBot',
   version: '1.20.1',
   owner: 'Misoty',
