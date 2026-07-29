@@ -1,7 +1,7 @@
 const mineflayer = require('mineflayer')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
 const { GoalNear, GoalFollow } = goals
-const Anthropic = require('@anthropic-ai/sdk')
+const Groq = require('groq-sdk')
 
 const config = {
   host: 'covrussmp.redstone.tr',
@@ -9,23 +9,30 @@ const config = {
   username: 'MisotyBot',
   version: '1.21.1',
   owner: 'Misoty',
-  anthropicApiKey: 'ANTHROPIC_API_KEY_BURAYA',
+  groqApiKey: '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',
   password: 'Egecan11'
 }
 
-const anthropic = new Anthropic({ apiKey: config.anthropicApiKey })
+const groq = new Groq({ apiKey: config.groqApiKey })
 const sohbetGecmisi = []
 
 async function claudeYanit(mesaj) {
   sohbetGecmisi.push({ role: 'user', content: mesaj })
   if (sohbetGecmisi.length > 20) sohbetGecmisi.splice(0, 2)
-  const yanit = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+
+  const yanit = await groq.chat.completions.create({
+    model: 'llama3-8b-8192',
     max_tokens: 150,
-    system: `Sen "MisotyBot" adında eğlenceli bir Minecraft botusun. Sahibin Misoty. Kısa ve samimi Türkçe cevaplar ver. Cevapların 200 karakteri geçmesin.`,
-    messages: sohbetGecmisi
+    messages: [
+      {
+        role: 'system',
+        content: `Sen "MisotyBot" adında eğlenceli bir Minecraft botusun. Sahibin Misoty. Kısa ve samimi Türkçe cevaplar ver. Cevapların 200 karakteri geçmesin.`
+      },
+      ...sohbetGecmisi
+    ]
   })
-  const metin = yanit.content[0].text
+
+  const metin = yanit.choices[0].message.content
   sohbetGecmisi.push({ role: 'assistant', content: metin })
   return metin
 }
@@ -63,7 +70,6 @@ bot.on('message', (jsonMsg) => {
 bot.on('spawn', () => {
   console.log('✅ Bot bağlandı!')
   setTimeout(() => { bot.chat(`/login ${config.password}`) }, 2000)
-  // Spawn olunca zırh giy
   setTimeout(() => autoArmor(), 3000)
 })
 
@@ -75,14 +81,12 @@ bot.on('health', () => {
 })
 
 function autoTotem() {
-  const offhand = bot.inventory.slots[45] // Offhand slotu
-  // Offhand'da totem yoksa yerleştir
+  const offhand = bot.inventory.slots[45]
   if (offhand && offhand.name === 'totem_of_undying') return
 
   const totem = bot.inventory.items().find(item => item.name === 'totem_of_undying')
   if (!totem) return
 
-  // Totemi offhand'a taşı
   bot.equip(totem, 'off-hand').catch(() => {})
 }
 
@@ -103,7 +107,7 @@ async function autoArmor() {
       if (item) {
         try {
           await bot.equip(item, slot)
-          console.log(`🛡️ ${itemName} giyildi (${slot})`)
+          console.log(`🛡️ \( {itemName} giyildi ( \){slot})`)
           break
         } catch (e) {}
       }
@@ -159,23 +163,25 @@ bot.on('chat', async (username, message) => {
 
       case 'envanter': {
         const items = bot.inventory.items()
-        bot.chat(items.length === 0 ? 'Envanterim boş.' : 'Envanter: ' + items.map(i => `${i.name} x${i.count}`).join(', '))
+        bot.chat(items.length === 0 ? 'Envanterim boş.' : 'Envanter: ' + items.map(i => `\( {i.name} x \){i.count}`).join(', '))
         break
       }
 
-      // !tpa → Misoty'ye tpa isteği at
       case 'tpa':
         bot.chat(`/tpa ${config.owner}`)
         bot.chat(`${config.owner} adlı oyuncuya TPA isteği attım!`)
         break
 
-      // Manuel zırh giy
+      case 'tpahere':
+        bot.chat(`/tpahere ${config.owner}`)
+        bot.chat(`${config.owner} adlı oyuncuya TPAHERE isteği attım!`)
+        break
+
       case 'zırh': case 'zirh':
         await autoArmor()
         bot.chat('Zırhları giydim!')
         break
 
-      // Manuel totem yerleştir
       case 'totem':
         autoTotem()
         bot.chat('Totemi offhand\'a aldım!')
@@ -186,7 +192,7 @@ bot.on('chat', async (username, message) => {
         bot.chat('Sohbet hafızamı temizledim!'); break
 
       case 'yardım': case 'yardim':
-        bot.chat('Komutlar: !topla | !saldır | !takip | !gel | !tpa | !zırh | !totem | !envanter | !dur | !sıfırla')
+        bot.chat('Komutlar: !topla | !saldır | !takip | !gel | !tpa | !tpahere | !zırh | !totem | !envanter | !dur | !sıfırla')
         break
 
       default:
@@ -271,7 +277,6 @@ bot.on('windowOpen', async (window) => {
   const title = JSON.stringify(window.title || '').toLowerCase()
   console.log('Pencere acildi:', title)
 
-  // Login GUI tespiti
   if (
     title.includes('login') ||
     title.includes('password') ||
@@ -282,10 +287,8 @@ bot.on('windowOpen', async (window) => {
     console.log('GUI login ekrani tespit edildi!')
     await new Promise(r => setTimeout(r, 800))
 
-    // /login komutu dene
     bot.chat('/login ' + config.password)
 
-    // Tum slotlari tara, bir butona tikla
     for (let i = 0; i < window.slots.length; i++) {
       if (window.slots[i]) {
         try {
@@ -297,11 +300,9 @@ bot.on('windowOpen', async (window) => {
     }
   }
 
-  // Anvil tipi login (bazi sunucularda)
   if (String(window.type).includes('anvil')) {
     console.log('Anvil GUI tespit edildi!')
     await new Promise(r => setTimeout(r, 800))
     try { await bot.clickWindow(2, 0, 0) } catch(e) {}
   }
 })
-      
