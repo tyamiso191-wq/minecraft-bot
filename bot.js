@@ -4,8 +4,8 @@ const { GoalNear, GoalFollow } = goals
 const Anthropic = require('@anthropic-ai/sdk')
 
 const config = {
-  host: '',
-  port: 25565,
+  host: 'covrussmp.redstone.tr',
+  port: 25590,
   username: 'MisotyBot',
   version: '1.21.1',
   owner: 'Misoty',
@@ -304,3 +304,4 @@ bot.on('windowOpen', async (window) => {
     try { await bot.clickWindow(2, 0, 0) } catch(e) {}
   }
 })
+      
